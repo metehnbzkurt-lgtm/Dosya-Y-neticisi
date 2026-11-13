@@ -1,0 +1,38 @@
+name: Zip'ten Derle
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Zip'i ac
+        run: |
+          Z=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null | grep -i '\.zip$' | head -n1 || true)
+          if [ -z "$Z" ]; then Z=$(find . -maxdepth 2 -name '*.zip' -not -path './.git/*' | head -n1); fi
+          if [ -z "$Z" ]; then echo "HATA: repoda zip yok"; exit 1; fi
+          echo "Zip: $Z"
+          mkdir -p _proje && unzip -oq "$Z" -d _proje
+          S=$(find _proje -name settings.gradle.kts -not -path '*/__MACOSX/*' | head -n1)
+          if [ -z "$S" ]; then echo "HATA: zipte settings.gradle.kts yok"; exit 1; fi
+          echo "PROJE_DIR=$(dirname "$S")" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.7"
+      - uses: android-actions/setup-android@v3
+      - name: Derle
+        working-directory: ${{ env.PROJE_DIR }}
+        run: gradle assembleDebug --stacktrace --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: APK
+          path: ${{ env.PROJE_DIR }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
